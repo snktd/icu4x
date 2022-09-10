@@ -44,15 +44,12 @@ use core::fmt;
 /// # use std::rc::Rc;
 /// # use std::convert::TryInto;
 ///
-/// let provider = icu_testdata::get_provider();
-///
 /// let locale = locale!("en-u-ca-japanese"); // English with the Japanese calendar
 ///
-/// let calendar = AnyCalendar::try_new_for_locale_with_buffer_provider(&provider, &(&locale).into())
+/// let calendar = AnyCalendar::try_new_for_locale_unstable(&icu_testdata::unstable(), &locale.into())
 ///                    .expect("constructing AnyCalendar failed");
 /// let calendar = Rc::new(calendar); // Avoid cloning it each time
 ///                                   // If everything is a local reference, you may use icu_calendar::Ref instead.
-///
 ///
 /// // manually construct a datetime in this calendar
 /// let manual_time = Time::try_new(12, 33, 12, 0).expect("failed to construct Time");
@@ -69,7 +66,7 @@ use core::fmt;
 /// let iso_converted = iso_datetime.to_calendar(calendar);
 ///
 /// // Construct a datetime in the appropriate typed calendar and convert
-/// let japanese_calendar = Japanese::try_new_with_buffer_provider(&provider).unwrap();
+/// let japanese_calendar = Japanese::try_new_unstable(&icu_testdata::unstable()).unwrap();
 /// let japanese_datetime = DateTime::new_japanese_datetime("heisei".parse().unwrap(), 15, 3, 28,
 ///                                                         12, 33, 12, japanese_calendar).unwrap();
 /// // This is a DateTime<AnyCalendar>
@@ -612,20 +609,25 @@ impl AnyCalendarKind {
     ///
     /// Returns None if the calendar is unknown
     pub fn from_bcp47_string(x: &str) -> Option<Self> {
+        Self::from_bcp47_bytes(x.as_bytes())
+    }
+    /// Construct from a BCP-47 byte string
+    ///
+    /// Returns None if the calendar is unknown
+    pub fn from_bcp47_bytes(x: &[u8]) -> Option<Self> {
         Some(match x {
-            "gregory" => AnyCalendarKind::Gregorian,
-            "buddhist" => AnyCalendarKind::Buddhist,
-            "japanese" => AnyCalendarKind::Japanese,
-            "japanext" => AnyCalendarKind::JapaneseExtended,
-            "indian" => AnyCalendarKind::Indian,
-            "coptic" => AnyCalendarKind::Coptic,
-            "iso" => AnyCalendarKind::Iso,
-            "ethiopic" => AnyCalendarKind::Ethiopian,
-            "ethioaa" => AnyCalendarKind::EthiopianAmeteAlem,
+            b"gregory" => AnyCalendarKind::Gregorian,
+            b"buddhist" => AnyCalendarKind::Buddhist,
+            b"japanese" => AnyCalendarKind::Japanese,
+            b"japanext" => AnyCalendarKind::JapaneseExtended,
+            b"indian" => AnyCalendarKind::Indian,
+            b"coptic" => AnyCalendarKind::Coptic,
+            b"iso" => AnyCalendarKind::Iso,
+            b"ethiopic" => AnyCalendarKind::Ethiopian,
+            b"ethioaa" => AnyCalendarKind::EthiopianAmeteAlem,
             _ => return None,
         })
     }
-
     /// Construct from a BCP-47 [`Value`]
     ///
     /// Returns an error if the calendar is unknown
@@ -936,33 +938,48 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "serde")]
     fn test_any_construction() {
-        let provider = icu_testdata::get_provider();
-
-        let buddhist =
-            AnyCalendar::try_new_with_buffer_provider(&provider, AnyCalendarKind::Buddhist)
-                .expect("Calendar construction must succeed");
-        let coptic = AnyCalendar::try_new_with_buffer_provider(&provider, AnyCalendarKind::Coptic)
-            .expect("Calendar construction must succeed");
-        let ethiopian =
-            AnyCalendar::try_new_with_buffer_provider(&provider, AnyCalendarKind::Ethiopian)
-                .expect("Calendar construction must succeed");
+        let buddhist = AnyCalendar::try_new_with_buffer_provider(
+            &icu_testdata::buffer(),
+            AnyCalendarKind::Buddhist,
+        )
+        .expect("Calendar construction must succeed");
+        let coptic = AnyCalendar::try_new_with_buffer_provider(
+            &icu_testdata::buffer(),
+            AnyCalendarKind::Coptic,
+        )
+        .expect("Calendar construction must succeed");
+        let ethiopian = AnyCalendar::try_new_with_buffer_provider(
+            &icu_testdata::buffer(),
+            AnyCalendarKind::Ethiopian,
+        )
+        .expect("Calendar construction must succeed");
         let ethioaa = AnyCalendar::try_new_with_buffer_provider(
-            &provider,
+            &icu_testdata::buffer(),
             AnyCalendarKind::EthiopianAmeteAlem,
         )
         .expect("Calendar construction must succeed");
-        let gregorian =
-            AnyCalendar::try_new_with_buffer_provider(&provider, AnyCalendarKind::Gregorian)
-                .expect("Calendar construction must succeed");
-        let indian = AnyCalendar::try_new_with_buffer_provider(&provider, AnyCalendarKind::Indian)
-            .expect("Calendar construction must succeed");
-        let japanese =
-            AnyCalendar::try_new_with_buffer_provider(&provider, AnyCalendarKind::Japanese)
-                .expect("Calendar construction must succeed");
-        let japanext =
-            AnyCalendar::try_new_with_buffer_provider(&provider, AnyCalendarKind::JapaneseExtended)
-                .expect("Calendar construction must succeed");
+        let gregorian = AnyCalendar::try_new_with_buffer_provider(
+            &icu_testdata::buffer(),
+            AnyCalendarKind::Gregorian,
+        )
+        .expect("Calendar construction must succeed");
+        let indian = AnyCalendar::try_new_with_buffer_provider(
+            &icu_testdata::buffer(),
+            AnyCalendarKind::Indian,
+        )
+        .expect("Calendar construction must succeed");
+        let japanese = AnyCalendar::try_new_with_buffer_provider(
+            &icu_testdata::buffer(),
+            AnyCalendarKind::Japanese,
+        )
+        .expect("Calendar construction must succeed");
+        let japanext = AnyCalendar::try_new_with_buffer_provider(
+            &icu_testdata::buffer(),
+            AnyCalendarKind::JapaneseExtended,
+        )
+        .expect("Calendar construction must succeed");
         let buddhist = Ref(&buddhist);
         let coptic = Ref(&coptic);
         let ethiopian = Ref(&ethiopian);

@@ -29,6 +29,8 @@
 
         Construct a default undefined :cpp:class:`ICU4XLocale` "und".
 
+        See the `Rust documentation for UND <https://unicode-org.github.io/icu4x-docs/doc/icu/locid/struct.Locale.html#associatedconstant.UND>`__ for more information.
+
 
     .. cpp:function:: ICU4XLocale clone() const
 
@@ -128,16 +130,16 @@
         See the `Rust documentation for from_bytes <https://unicode-org.github.io/icu4x-docs/doc/icu/locid/struct.Locale.html#method.from_bytes>`__ for more information.
 
 
-    .. cpp:function:: template<typename W> diplomat::result<std::monostate, ICU4XError> tostring_to_writeable(W& write) const
+    .. cpp:function:: template<typename W> diplomat::result<std::monostate, ICU4XError> to_string_to_writeable(W& write) const
 
         Write a string representation of :cpp:class:`ICU4XLocale` to ``write``
 
-        See the `Rust documentation for Locale <https://unicode-org.github.io/icu4x-docs/doc/icu/locid/struct.Locale.html>`__ for more information.
+        See the `Rust documentation for write_to <https://unicode-org.github.io/icu4x-docs/doc/icu/locid/struct.Locale.html#method.write_to>`__ for more information.
 
 
-    .. cpp:function:: diplomat::result<std::string, ICU4XError> tostring() const
+    .. cpp:function:: diplomat::result<std::string, ICU4XError> to_string() const
 
         Write a string representation of :cpp:class:`ICU4XLocale` to ``write``
 
-        See the `Rust documentation for Locale <https://unicode-org.github.io/icu4x-docs/doc/icu/locid/struct.Locale.html>`__ for more information.
+        See the `Rust documentation for write_to <https://unicode-org.github.io/icu4x-docs/doc/icu/locid/struct.Locale.html#method.write_to>`__ for more information.
 

@@ -60,7 +60,12 @@ fn data_ce_to_primary(data_ce: u64, c: char) -> u32 {
 }
 
 /// The main collation data either for the root or for a tailoring
-#[icu_provider::data_struct(CollationDataV1Marker = "collator/data@1")]
+#[icu_provider::data_struct(marker(
+    CollationDataV1Marker,
+    "collator/data@1",
+    extension_key = "co",
+    fallback_by = "collation"
+))]
 #[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "datagen", derive(serde::Serialize, databake::Bake), databake(path = icu_collator::provider))]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize))]
@@ -84,7 +89,7 @@ pub struct CollationDataV1<'data> {
 
 impl<'data> CollationDataV1<'data> {
     pub(crate) fn ce32_for_char(&self, c: char) -> CollationElement32 {
-        CollationElement32::new(self.trie.get(c as u32))
+        CollationElement32::new(self.trie.get32(c as u32))
     }
     pub(crate) fn get_ce32(&'data self, index: usize) -> CollationElement32 {
         CollationElement32::new(if let Some(u) = self.ce32s.get(index) {
@@ -141,7 +146,7 @@ impl<'data> CollationDataV1<'data> {
         index: usize,
     ) -> (CollationElement32, Char16TrieIterator<'data>) {
         let (ce32, trie) = self.get_default_and_trie_impl(index);
-        (ce32, Char16TrieIterator::new(trie.as_ule_slice()))
+        (ce32, Char16TrieIterator::new(trie))
     }
     pub(crate) fn get_default(&'data self, index: usize) -> CollationElement32 {
         let (ce32, _) = self.get_default_and_trie_impl(index);
@@ -164,7 +169,12 @@ impl<'data> CollationDataV1<'data> {
 }
 
 /// Secondary weights for the start of the Combining Diacritics block.
-#[icu_provider::data_struct(CollationDiacriticsV1Marker = "collator/dia@1")]
+#[icu_provider::data_struct(marker(
+    CollationDiacriticsV1Marker,
+    "collator/dia@1",
+    extension_key = "co",
+    fallback_by = "collation"
+))]
 #[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "datagen", derive(serde::Serialize, databake::Bake), databake(path = icu_collator::provider))]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize))]
@@ -190,7 +200,12 @@ pub struct CollationJamoV1<'data> {
 }
 
 /// Script reordering data
-#[icu_provider::data_struct(CollationReorderingV1Marker = "collator/reord@1")]
+#[icu_provider::data_struct(marker(
+    CollationReorderingV1Marker,
+    "collator/reord@1",
+    extension_key = "co",
+    fallback_by = "collation"
+))]
 #[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "datagen", derive(serde::Serialize, databake::Bake), databake(path = icu_collator::provider))]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize))]
@@ -268,7 +283,12 @@ impl<'data> CollationReorderingV1<'data> {
 /// Each non-alias collation that the data provider knows
 /// about explicitly has an data entry at least for this
 /// struct.
-#[icu_provider::data_struct(CollationMetadataV1Marker = "collator/meta@1")]
+#[icu_provider::data_struct(marker(
+    CollationMetadataV1Marker,
+    "collator/meta@1",
+    extension_key = "co",
+    fallback_by = "collation"
+))]
 #[derive(Debug, PartialEq, Clone, Copy)]
 #[cfg_attr(feature = "datagen", derive(serde::Serialize, databake::Bake), databake(path = icu_collator::provider))]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize))]

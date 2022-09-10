@@ -6,6 +6,7 @@ use smallvec::SmallVec;
 
 use core::cmp;
 use core::cmp::Ordering;
+use core::convert::TryFrom;
 use core::fmt;
 use core::ops::RangeInclusive;
 
@@ -118,8 +119,8 @@ pub struct FixedDecimal {
 }
 
 /// A specification of the sign used when formatting a number.
+#[non_exhaustive]
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
-#[allow(clippy::exhaustive_enums)] // TODO(#1668)
 pub enum Sign {
     /// No sign (implicitly positive, e.g., 1729).
     None,
@@ -1692,7 +1693,7 @@ impl writeable::Writeable for FixedDecimal {
     /// use writeable::Writeable;
     ///
     /// let dec = FixedDecimal::from(42);
-    /// let mut result = String::with_capacity(dec.write_len().capacity());
+    /// let mut result = String::with_capacity(dec.writeable_length_hint().capacity());
     /// dec.write_to(&mut result)
     ///     .expect("write_to(String) should not fail");
     /// assert_eq!("42", result);
@@ -1726,9 +1727,9 @@ impl writeable::Writeable for FixedDecimal {
     /// let dec = FixedDecimal::from(-5000)
     ///     .multiplied_pow10(-2);
     /// let result = dec.write_to_string();
-    /// assert_eq!(LengthHint::exact(6), dec.write_len());
+    /// assert_eq!(LengthHint::exact(6), dec.writeable_length_hint());
     /// ```
-    fn write_len(&self) -> writeable::LengthHint {
+    fn writeable_length_hint(&self) -> writeable::LengthHint {
         writeable::LengthHint::exact(1)
             + ((self.upper_magnitude as i32 - self.lower_magnitude as i32) as usize)
             + (if self.sign == Sign::None { 0 } else { 1 })
@@ -1736,22 +1737,23 @@ impl writeable::Writeable for FixedDecimal {
     }
 }
 
-/// Renders the `FixedDecimal` according to the syntax documented in `FixedDecimal::write_to`.
-impl fmt::Display for FixedDecimal {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeable::Writeable::write_to(self, f)
-    }
-}
+writeable::impl_display_with_writeable!(FixedDecimal);
 
 impl FromStr for FixedDecimal {
     type Err = Error;
     fn from_str(input_str: &str) -> Result<Self, Self::Err> {
+        Self::try_from(input_str.as_bytes())
+    }
+}
+
+impl TryFrom<&[u8]> for FixedDecimal {
+    type Error = Error;
+    fn try_from(input_str: &[u8]) -> Result<Self, Self::Error> {
         // input_str: the input string
         // no_sign_str: the input string when the sign is removed from it
         if input_str.is_empty() {
             return Err(Error::Syntax);
         }
-        let input_str = input_str.as_bytes();
         #[allow(clippy::indexing_slicing)] // The string is not empty.
         let sign = match input_str[0] {
             b'-' => Sign::Negative,
@@ -1819,7 +1821,7 @@ impl FromStr for FixedDecimal {
         // The string without the exponent (or sign)
         // We do the bulk of the calculation on this string,
         // and extract the exponent at the end
-        #[allow(clippy::indexing_slicing)] // TODO(#1668) Clippy exceptions need docs or fixing.
+        #[allow(clippy::indexing_slicing)] // exponent_index comes from enumerate
         let no_exponent_str = &no_sign_str[..exponent_index];
 
         // If there was no dot, truncate the dot index
@@ -1897,7 +1899,8 @@ impl FromStr for FixedDecimal {
         }
 
         // Constructing DecimalFixed.digits
-        #[allow(clippy::indexing_slicing)] // TODO(#1668) Clippy exceptions need docs or fixing.
+        #[allow(clippy::indexing_slicing)]
+        // leftmost_digit  and rightmost_digit_end come from Iterator::position and Iterator::rposition.
         let v: SmallVec<[u8; 8]> = no_exponent_str[leftmost_digit..rightmost_digit_end]
             .iter()
             .filter(|c| **c != b'.')
@@ -1913,7 +1916,7 @@ impl FromStr for FixedDecimal {
             let mut pow = 0;
             let mut pos_neg = 1;
             #[allow(clippy::indexing_slicing)]
-            // TODO(#1668) Clippy exceptions need docs or fixing.
+            // exponent_index is exist, then exponent_index + 1 will equal at most no_sign_str.len().
             for digit in &no_sign_str[exponent_index + 1..] {
                 if *digit == b'-' {
                     pos_neg = -1;
@@ -1945,9 +1948,9 @@ impl FromStr for FixedDecimal {
 /// specifies not only the point on the number line but also the precision of the number to a
 /// specific power of 10. This enum augments a floating-point value with the additional
 /// information required by FixedDecimal.
+#[non_exhaustive]
 #[cfg(feature = "ryu")]
 #[derive(Debug, Clone, Copy)]
-#[allow(clippy::exhaustive_enums)] // TODO(#1668)
 pub enum DoublePrecision {
     /// Specify that the floating point number is integer-valued.
     ///

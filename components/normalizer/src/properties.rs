@@ -12,7 +12,6 @@
 //! glyph-availability-guided custom normalizer.
 
 use crate::char_from_u16;
-use crate::char_from_u24;
 use crate::error::NormalizerError;
 use crate::in_inclusive_range;
 use crate::provider::CanonicalCompositionsV1Marker;
@@ -53,8 +52,7 @@ impl CanonicalComposition {
     /// Composition exclusions are taken into account.
     ///
     /// ```
-    /// let data_provider = icu_testdata::get_provider();
-    /// let comp = icu_normalizer::properties::CanonicalComposition::try_new_with_buffer_provider(&data_provider).unwrap();
+    /// let comp = icu_normalizer::properties::CanonicalComposition::try_new_unstable(&icu_testdata::unstable()).unwrap();
     ///
     /// assert_eq!(comp.compose('a', 'b'), None); // Just two non-composing starters
     /// assert_eq!(comp.compose('a', '\u{0308}'), Some('ä'));
@@ -120,8 +118,7 @@ impl CanonicalDecomposition {
     ///
     /// ```
     ///     use icu_normalizer::properties::Decomposed;
-    ///     let data_provider = icu_testdata::get_provider();
-    ///     let decomp = icu_normalizer::properties::CanonicalDecomposition::try_new_with_buffer_provider(&data_provider).unwrap();
+    ///     let decomp = icu_normalizer::properties::CanonicalDecomposition::try_new_unstable(&icu_testdata::unstable()).unwrap();
     ///
     ///     assert_eq!(decomp.decompose('e'), Decomposed::Default);
     ///     assert_eq!(
@@ -161,7 +158,7 @@ impl CanonicalDecomposition {
     /// are reported as `Decomposed::Default`.
     #[inline(always)]
     fn decompose_non_hangul(&self, c: char) -> Decomposed {
-        let decomposition = self.decompositions.get().trie.get(u32::from(c));
+        let decomposition = self.decompositions.get().trie.get(c);
         if decomposition <= BACKWARD_COMBINING_STARTER_MARKER {
             return Decomposed::Default;
         }
@@ -269,13 +266,11 @@ impl CanonicalDecomposition {
                 break;
             }
             let offset24 = offset - tables.scalars16.len();
-            if let Some(first) = tables.scalars24.get(offset24) {
-                let first_c = char_from_u24(first);
+            if let Some(first_c) = tables.scalars24.get(offset24) {
                 if len == 1 {
                     return Decomposed::Singleton(first_c);
                 }
-                if let Some(second) = tables.scalars24.get(offset24 + 1) {
-                    let second_c = char_from_u24(second);
+                if let Some(second_c) = tables.scalars24.get(offset24 + 1) {
                     return Decomposed::Expansion(first_c, second_c);
                 }
             }
@@ -284,7 +279,7 @@ impl CanonicalDecomposition {
             return Decomposed::Default;
         }
         let non_recursive = self.non_recursive.get();
-        let non_recursive_decomposition = non_recursive.trie.get(u32::from(c));
+        let non_recursive_decomposition = non_recursive.trie.get(c);
         if non_recursive_decomposition == 0 {
             // GIGO case
             debug_assert!(false);
@@ -305,7 +300,7 @@ impl CanonicalDecomposition {
         let offset = usize::from(trail_or_complex - 1);
         if let Some(first) = non_recursive.scalars24.get(offset) {
             if let Some(second) = non_recursive.scalars24.get(offset + 1) {
-                return Decomposed::Expansion(char_from_u24(first), char_from_u24(second));
+                return Decomposed::Expansion(first, second);
             }
         }
         // GIGO case
@@ -357,10 +352,9 @@ impl CanonicalDecomposition {
 /// use icu_properties::CanonicalCombiningClass;
 /// use icu_normalizer::properties::CanonicalCombiningClassMap;
 ///
-/// let provider = icu_testdata::get_provider();
-/// let map = CanonicalCombiningClassMap::try_new_unstable(&provider).unwrap();
+/// let map = CanonicalCombiningClassMap::try_new_unstable(&icu_testdata::unstable()).unwrap();
 /// assert_eq!(map.get('a'), CanonicalCombiningClass::NotReordered); // U+0061: LATIN SMALL LETTER A
-/// assert_eq!(map.get_u32(0x0301), CanonicalCombiningClass::Above); // U+0301: COMBINING ACUTE ACCENT
+/// assert_eq!(map.get32(0x0301), CanonicalCombiningClass::Above); // U+0301: COMBINING ACUTE ACCENT
 /// ```
 pub struct CanonicalCombiningClassMap {
     /// The data trie
@@ -371,14 +365,14 @@ impl CanonicalCombiningClassMap {
     /// Look up the canonical combining class for a scalar value
     #[inline(always)]
     pub fn get(&self, c: char) -> CanonicalCombiningClass {
-        self.get_u32(u32::from(c))
+        self.get32(u32::from(c))
     }
 
     /// Look up the canonical combining class for a scalar value
     /// represented as `u32`. If the argument is outside the scalar
     /// value range, `CanonicalCombiningClass::NotReordered` is returned.
-    pub fn get_u32(&self, c: u32) -> CanonicalCombiningClass {
-        let trie_value = self.decompositions.get().trie.get(c);
+    pub fn get32(&self, c: u32) -> CanonicalCombiningClass {
+        let trie_value = self.decompositions.get().trie.get32(c);
         if trie_value_has_ccc(trie_value) {
             CanonicalCombiningClass(trie_value as u8)
         } else if trie_value_indicates_special_non_starter_decomposition(trie_value) {

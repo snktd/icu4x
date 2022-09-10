@@ -5,7 +5,6 @@
 //! The collection of code for locale canonicalization.
 
 use crate::provider::*;
-use alloc::vec;
 use alloc::vec::Vec;
 use core::cmp::Ordering;
 
@@ -13,12 +12,12 @@ use crate::LocaleExpander;
 use crate::TransformResult;
 use icu_locid::subtags::{Language, Region, Script};
 use icu_locid::{
-    extensions::unicode::Key,
+    extensions_unicode_key as key,
     subtags::{Variant, Variants},
     subtags_language as language, LanguageIdentifier, Locale,
 };
 use icu_provider::prelude::*;
-use tinystr::{tinystr, TinyAsciiStr};
+use tinystr::TinyAsciiStr;
 
 /// The LocaleCanonicalizer provides methods to canonicalize Locales and
 /// LanguageIdentifiers based upon [`CLDR`] data.
@@ -29,19 +28,16 @@ use tinystr::{tinystr, TinyAsciiStr};
 /// # Examples
 ///
 /// ```
-/// use icu_locid_transform::{TransformResult, LocaleCanonicalizer};
 /// use icu_locid::Locale;
+/// use icu_locid_transform::{LocaleCanonicalizer, TransformResult};
 ///
-/// let provider = icu_testdata::get_provider();
-/// let lc = LocaleCanonicalizer::try_new_with_buffer_provider(&provider).expect("create failed");
+/// let lc = LocaleCanonicalizer::try_new_unstable(&icu_testdata::unstable())
+///     .expect("create failed");
 ///
 /// let mut locale: Locale = "ja-Latn-fonipa-hepburn-heploc"
 ///     .parse()
 ///     .expect("parse failed");
-/// assert_eq!(
-///     lc.canonicalize(&mut locale),
-///     TransformResult::Modified
-/// );
+/// assert_eq!(lc.canonicalize(&mut locale), TransformResult::Modified);
 /// assert_eq!(locale.to_string(), "ja-Latn-alalc97-fonipa");
 /// ```
 ///
@@ -53,8 +49,6 @@ pub struct LocaleCanonicalizer {
     aliases: DataPayload<AliasesV1Marker>,
     /// Likely subtags implementation for delegation.
     expander: LocaleExpander,
-    /// Extension keys that require canonicalization.
-    extension_keys: Vec<Key>,
 }
 
 #[inline]
@@ -218,22 +212,12 @@ impl LocaleCanonicalizer {
     where
         P: DataProvider<AliasesV1Marker> + DataProvider<LikelySubtagsV1Marker> + ?Sized,
     {
-        // The `rg` region override and `sd` regional subdivision keys may contain
-        // language codes that require canonicalization.
-        let extension_keys = vec![
-            Key::from_tinystr_unchecked(tinystr!(2, "rg")),
-            Key::from_tinystr_unchecked(tinystr!(2, "sd")),
-        ];
         let aliases: DataPayload<AliasesV1Marker> =
             provider.load(Default::default())?.take_payload()?;
 
         let expander = LocaleExpander::try_new_unstable(provider)?;
 
-        Ok(LocaleCanonicalizer {
-            aliases,
-            expander,
-            extension_keys,
-        })
+        Ok(LocaleCanonicalizer { aliases, expander })
     }
 
     icu_provider::gen_any_buffer_constructors!(locale: skip, options: skip, error: DataError);
@@ -250,19 +234,16 @@ impl LocaleCanonicalizer {
     /// # Examples
     ///
     /// ```
-    /// use icu_locid_transform::{TransformResult, LocaleCanonicalizer};
     /// use icu_locid::Locale;
+    /// use icu_locid_transform::{LocaleCanonicalizer, TransformResult};
     ///
-    /// let provider = icu_testdata::get_provider();
-    /// let lc = LocaleCanonicalizer::try_new_with_buffer_provider(&provider).expect("create failed");
+    /// let lc = LocaleCanonicalizer::try_new_unstable(&icu_testdata::unstable())
+    ///     .expect("create failed");
     ///
     /// let mut locale: Locale = "ja-Latn-fonipa-hepburn-heploc"
     ///     .parse()
     ///     .expect("parse failed");
-    /// assert_eq!(
-    ///     lc.canonicalize(&mut locale),
-    ///     TransformResult::Modified
-    /// );
+    /// assert_eq!(lc.canonicalize(&mut locale), TransformResult::Modified);
     /// assert_eq!(locale.to_string(), "ja-Latn-alalc97-fonipa");
     /// ```
     pub fn canonicalize(&self, locale: &mut Locale) -> TransformResult {
@@ -467,7 +448,9 @@ impl LocaleCanonicalizer {
             }
         }
 
-        for key in self.extension_keys.iter() {
+        // The `rg` region override and `sd` regional subdivision keys may contain
+        // language codes that require canonicalization.
+        for key in &[key!("rg"), key!("sd")] {
             if let Some(value) = locale.extensions.unicode.keywords.get_mut(key) {
                 if let &[only_value] = value.as_tinystr_slice() {
                     if let Some(modified_value) =

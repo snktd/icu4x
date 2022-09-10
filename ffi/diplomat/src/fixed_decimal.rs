@@ -126,7 +126,8 @@ pub mod ffi {
         /// Construct an [`ICU4XFixedDecimal`] from a string.
         #[diplomat::rust_link(fixed_decimal::FixedDecimal::from_str, FnInStruct)]
         pub fn create_from_str(v: &str) -> DiplomatResult<Box<ICU4XFixedDecimal>, ICU4XError> {
-            v.parse::<FixedDecimal>()
+            let v = v.as_bytes(); // #2520
+            FixedDecimal::try_from(v)
                 .map(convert)
                 .map_err(Into::into)
                 .into()
@@ -318,6 +319,7 @@ impl From<Sign> for ffi::ICU4XFixedDecimalSign {
             Sign::None => Self::None,
             Sign::Negative => Self::Negative,
             Sign::Positive => Self::Positive,
+            _ => unreachable!("This should not happen, because all the cases are covered."),
         }
     }
 }

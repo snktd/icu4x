@@ -190,14 +190,15 @@ impl ScriptExtensionsSet<'_> {
     ///
     /// ```
     /// use icu::properties::{script, Script};
-    /// let provider = icu_testdata::get_provider();
-    /// let payload = script::load_script_with_extensions_with_buffer_provider(&provider).expect("The data should be valid");
+    /// let payload =
+    ///     script::load_script_with_extensions_unstable(&icu_testdata::unstable())
+    ///         .expect("The data should be valid");
     /// let data_struct = payload.get();
     /// let swe = &data_struct.data;
     ///
     /// assert!(swe
-    ///    .get_script_extensions_val(0x11303) // GRANTHA SIGN VISARGA
-    ///    .contains(&Script::Grantha));
+    ///     .get_script_extensions_val(0x11303) // GRANTHA SIGN VISARGA
+    ///     .contains(&Script::Grantha));
     /// ```
     pub fn contains(&self, x: &Script) -> bool {
         ZeroSlice::binary_search(&*self.values, x).is_ok()
@@ -209,8 +210,9 @@ impl ScriptExtensionsSet<'_> {
     ///
     /// ```
     /// use icu::properties::{script, Script};
-    /// let provider = icu_testdata::get_provider();
-    /// let payload = script::load_script_with_extensions_with_buffer_provider(&provider).expect("The data should be valid");
+    /// let payload =
+    ///     script::load_script_with_extensions_unstable(&icu_testdata::unstable())
+    ///         .expect("The data should be valid");
     /// let data_struct = payload.get();
     /// let swe = &data_struct.data;
     ///
@@ -253,6 +255,7 @@ pub struct ScriptWithExtensions<'data> {
     /// When the lower 10 bits of the value are used as an index, that index is
     /// used for the outer-level vector of the nested `extensions` structure.
     #[cfg_attr(feature = "serde", serde(borrow))]
+    #[doc(hidden)] // #2417
     pub trie: CodePointTrie<'data, ScriptWithExt>,
 
     /// This companion structure stores Script_Extensions values, which are
@@ -261,6 +264,7 @@ pub struct ScriptWithExtensions<'data> {
     /// sub-vector represents the Script_Extensions array value for a code point,
     /// and may also indicate Script value, as described for the `trie` field.
     #[cfg_attr(feature = "serde", serde(borrow))]
+    #[doc(hidden)] // #2417
     pub extensions: VarZeroVec<'data, ZeroSlice<Script>>,
 }
 
@@ -282,9 +286,7 @@ impl<'data> ScriptWithExtensions<'data> {
     /// ```
     /// use icu::properties::{script, Script};
     ///
-    /// let provider = icu_testdata::get_provider();
-    ///
-    /// let payload = script::load_script_with_extensions_with_buffer_provider(&provider).expect("The data should be valid");
+    /// let payload = script::load_script_with_extensions_unstable(&icu_testdata::unstable()).expect("The data should be valid");
     /// let data_struct = payload.get();
     /// let swe = &data_struct.data;
     ///
@@ -313,7 +315,7 @@ impl<'data> ScriptWithExtensions<'data> {
     /// assert_ne!(swe.get_script_val(0xFDF2), Script::Thaana);
     /// ```
     pub fn get_script_val(&self, code_point: u32) -> Script {
-        let sc_with_ext = self.trie.get(code_point);
+        let sc_with_ext = self.trie.get32(code_point);
 
         if sc_with_ext.is_other() {
             let ext_idx = sc_with_ext.0 & SCRIPT_X_SCRIPT_VAL;
@@ -381,9 +383,7 @@ impl<'data> ScriptWithExtensions<'data> {
     /// ```
     /// use icu::properties::{script, Script};
     ///
-    /// let provider = icu_testdata::get_provider();
-    ///
-    /// let payload = script::load_script_with_extensions_with_buffer_provider(&provider).expect("The data should be valid");
+    /// let payload = script::load_script_with_extensions_unstable(&icu_testdata::unstable()).expect("The data should be valid");
     /// let data_struct = payload.get();
     /// let swe = &data_struct.data;
     ///
@@ -413,7 +413,7 @@ impl<'data> ScriptWithExtensions<'data> {
     /// );
     /// ```
     pub fn get_script_extensions_val(&self, code_point: u32) -> ScriptExtensionsSet {
-        let sc_with_ext_ule = self.trie.get_ule(code_point);
+        let sc_with_ext_ule = self.trie.get32_ule(code_point);
 
         ScriptExtensionsSet {
             values: match sc_with_ext_ule {
@@ -435,9 +435,10 @@ impl<'data> ScriptWithExtensions<'data> {
     /// ```
     /// use icu::properties::{script, Script};
     ///
-    /// let provider = icu_testdata::get_provider();
-    ///
-    /// let payload = script::load_script_with_extensions_with_buffer_provider(&provider).expect("The data should be valid");
+    /// let provider = icu_testdata::unstable();
+    /// let payload =
+    ///     script::load_script_with_extensions_unstable(&icu_testdata::unstable())
+    ///         .expect("The data should be valid");
     /// let data_struct = payload.get();
     /// let swe = &data_struct.data;
     ///
@@ -460,7 +461,7 @@ impl<'data> ScriptWithExtensions<'data> {
     /// assert!(swe.has_script(0xFDF2, Script::Thaana));
     /// ```
     pub fn has_script(&self, code_point: u32, script: Script) -> bool {
-        let sc_with_ext_ule = if let Some(scwe_ule) = self.trie.get_ule(code_point) {
+        let sc_with_ext_ule = if let Some(scwe_ule) = self.trie.get32_ule(code_point) {
             scwe_ule
         } else {
             return false;
@@ -485,9 +486,7 @@ impl<'data> ScriptWithExtensions<'data> {
     /// ```
     /// use icu::properties::{script, Script};
     ///
-    /// let provider = icu_testdata::get_provider();
-    ///
-    /// let payload = script::load_script_with_extensions_with_buffer_provider(&provider).expect("The data should be valid");
+    /// let payload = script::load_script_with_extensions_unstable(&icu_testdata::unstable()).expect("The data should be valid");
     /// let data_struct = payload.get();
     /// let swe = &data_struct.data;
     ///
@@ -549,28 +548,26 @@ impl<'data> ScriptWithExtensions<'data> {
     /// ```
     /// use icu::properties::{script, Script};
     ///
-    /// let provider = icu_testdata::get_provider();
-    ///
-    /// let payload = script::load_script_with_extensions_with_buffer_provider(&provider).expect("The data should be valid");
+    /// let payload = script::load_script_with_extensions_unstable(&icu_testdata::unstable()).expect("The data should be valid");
     /// let data_struct = payload.get();
     /// let swe = &data_struct.data;
     ///
     /// let syriac = swe.get_script_extensions_set(Script::Syriac);
     ///
-    /// assert!(!syriac.contains_u32(0x061E)); // ARABIC TRIPLE DOT PUNCTUATION MARK
-    /// assert!(syriac.contains_u32(0x061F)); // ARABIC QUESTION MARK
-    /// assert!(!syriac.contains_u32(0x0620)); // ARABIC LETTER KASHMIRI YEH
+    /// assert!(!syriac.contains32(0x061E)); // ARABIC TRIPLE DOT PUNCTUATION MARK
+    /// assert!(syriac.contains32(0x061F)); // ARABIC QUESTION MARK
+    /// assert!(!syriac.contains32(0x0620)); // ARABIC LETTER KASHMIRI YEH
     ///
-    /// assert!(syriac.contains_u32(0x0700)); // SYRIAC END OF PARAGRAPH
-    /// assert!(syriac.contains_u32(0x074A)); // SYRIAC BARREKH
-    /// assert!(!syriac.contains_u32(0x074B)); // unassigned
-    /// assert!(syriac.contains_u32(0x074F)); // SYRIAC LETTER SOGDIAN FE
-    /// assert!(!syriac.contains_u32(0x0750)); // ARABIC LETTER BEH WITH THREE DOTS HORIZONTALLY BELOW
+    /// assert!(syriac.contains32(0x0700)); // SYRIAC END OF PARAGRAPH
+    /// assert!(syriac.contains32(0x074A)); // SYRIAC BARREKH
+    /// assert!(!syriac.contains32(0x074B)); // unassigned
+    /// assert!(syriac.contains32(0x074F)); // SYRIAC LETTER SOGDIAN FE
+    /// assert!(!syriac.contains32(0x0750)); // ARABIC LETTER BEH WITH THREE DOTS HORIZONTALLY BELOW
     ///
-    /// assert!(syriac.contains_u32(0x1DF8)); // COMBINING DOT ABOVE LEFT
-    /// assert!(!syriac.contains_u32(0x1DF9)); // COMBINING WIDE INVERTED BRIDGE BELOW
-    /// assert!(syriac.contains_u32(0x1DFA)); // COMBINING DOT BELOW LEFT
-    /// assert!(!syriac.contains_u32(0x1DFB)); // COMBINING DELETION MARK
+    /// assert!(syriac.contains32(0x1DF8)); // COMBINING DOT ABOVE LEFT
+    /// assert!(!syriac.contains32(0x1DF9)); // COMBINING WIDE INVERTED BRIDGE BELOW
+    /// assert!(syriac.contains32(0x1DFA)); // COMBINING DOT BELOW LEFT
+    /// assert!(!syriac.contains32(0x1DFB)); // COMBINING DELETION MARK
     /// ```
     pub fn get_script_extensions_set(&self, script: Script) -> CodePointInversionList {
         CodePointInversionList::from_iter(self.get_script_extensions_ranges(script))
@@ -589,10 +586,8 @@ pub type ScriptWithExtensionsResult =
 /// ```
 /// use icu::properties::{script, Script};
 ///
-/// let provider = icu_testdata::get_provider();
-///
 /// let payload =
-///     script::load_script_with_extensions_with_buffer_provider(&provider)
+///     script::load_script_with_extensions_unstable(&icu_testdata::unstable())
 ///         .expect("The data should be valid");
 /// let data_struct = payload.get();
 /// let swe = &data_struct.data;
@@ -636,11 +631,11 @@ pub type ScriptWithExtensionsResult =
 ///
 /// // get a `CodePointInversionList` for when `Script` value is contained in `Script_Extensions` value
 /// let syriac = swe.get_script_extensions_set(Script::Syriac);
-/// assert!(syriac.contains_u32(0x0650)); // ARABIC KASRA
-/// assert!(!syriac.contains_u32(0x0660)); // ARABIC-INDIC DIGIT ZERO
-/// assert!(!syriac.contains_u32(0xFDF2)); // ARABIC LIGATURE ALLAH ISOLATED FORM
-/// assert!(syriac.contains_u32(0x0700)); // SYRIAC END OF PARAGRAPH
-/// assert!(syriac.contains_u32(0x074A)); // SYRIAC BARREKH
+/// assert!(syriac.contains32(0x0650)); // ARABIC KASRA
+/// assert!(!syriac.contains32(0x0660)); // ARABIC-INDIC DIGIT ZERO
+/// assert!(!syriac.contains32(0xFDF2)); // ARABIC LIGATURE ALLAH ISOLATED FORM
+/// assert!(syriac.contains32(0x0700)); // SYRIAC END OF PARAGRAPH
+/// assert!(syriac.contains32(0x074A)); // SYRIAC BARREKH
 /// ```
 pub fn load_script_with_extensions_unstable(
     provider: &(impl DataProvider<ScriptWithExtensionsPropertyV1Marker> + ?Sized),

@@ -67,16 +67,16 @@
 
 extern crate alloc;
 
-pub mod error;
+mod error;
 pub mod properties;
 pub mod provider;
-pub mod u24;
 
-use crate::error::NormalizerError;
+pub use crate::error::NormalizerError;
+
 use crate::provider::CanonicalDecompositionDataV1Marker;
 use crate::provider::CompatibilityDecompositionSupplementV1Marker;
 use crate::provider::DecompositionDataV1;
-#[cfg(any(test, feature = "experimental"))]
+#[cfg(feature = "experimental")]
 use crate::provider::Uts46DecompositionSupplementV1Marker;
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -94,8 +94,6 @@ use provider::CompatibilityDecompositionTablesV1Marker;
 use provider::DecompositionSupplementV1;
 use provider::DecompositionTablesV1;
 use smallvec::SmallVec;
-use u24::EMPTY_U24;
-use u24::U24;
 use utf16_iter::Utf16CharsEx;
 use utf8_iter::Utf8CharsEx;
 use write16::Write16;
@@ -105,7 +103,7 @@ use zerovec::ZeroSlice;
 
 enum SupplementPayloadHolder {
     Compatibility(DataPayload<CompatibilityDecompositionSupplementV1Marker>),
-    #[cfg(any(test, feature = "experimental"))]
+    #[cfg(feature = "experimental")]
     Uts46(DataPayload<Uts46DecompositionSupplementV1Marker>),
 }
 
@@ -113,7 +111,7 @@ impl SupplementPayloadHolder {
     fn get(&self) -> &DecompositionSupplementV1 {
         match self {
             SupplementPayloadHolder::Compatibility(d) => d.get(),
-            #[cfg(any(test, feature = "experimental"))]
+            #[cfg(feature = "experimental")]
             SupplementPayloadHolder::Uts46(d) => d.get(),
         }
     }
@@ -242,48 +240,10 @@ fn char_from_u16(u: u16) -> char {
     char_from_u32(u32::from(u))
 }
 
-/// Convert a `U24` _obtained from data provider data_ to `char`.
-#[inline(always)]
-fn char_from_u24(u: U24) -> char {
-    char_from_u32(u.into())
-}
-
 const EMPTY_U16: &ZeroSlice<u16> =
     ZeroSlice::<u16>::from_ule_slice(&<u16 as AsULE>::ULE::from_array([]));
 
-#[inline(always)]
-fn split_first_u16(s: Option<&ZeroSlice<u16>>) -> (char, &ZeroSlice<u16>) {
-    if let Some(slice) = s {
-        if let Some(first) = slice.first() {
-            return (
-                char_from_u16(first),
-                // `unwrap()` must succeed, because `first()` returned `Some`.
-                #[allow(clippy::unwrap_used)]
-                slice.get_subslice(1..slice.len()).unwrap(),
-            );
-        }
-    }
-    // GIGO case
-    debug_assert!(false);
-    (REPLACEMENT_CHARACTER, EMPTY_U16)
-}
-
-#[inline(always)]
-fn split_first_u24(s: Option<&ZeroSlice<U24>>) -> (char, &ZeroSlice<U24>) {
-    if let Some(slice) = s {
-        if let Some(first) = slice.first() {
-            return (
-                char_from_u24(first),
-                // `unwrap()` must succeed, because `first()` returned `Some`.
-                #[allow(clippy::unwrap_used)]
-                slice.get_subslice(1..slice.len()).unwrap(),
-            );
-        }
-    }
-    // GIGO case
-    debug_assert!(false);
-    (REPLACEMENT_CHARACTER, EMPTY_U24)
-}
+const EMPTY_CHAR: &ZeroSlice<char> = ZeroSlice::new_empty();
 
 #[inline(always)]
 fn in_inclusive_range(c: char, start: char, end: char) -> bool {
@@ -510,7 +470,7 @@ impl CharacterAndClass {
             return;
         }
         let scalar = self.0 & 0xFFFFFF;
-        self.0 = ((ccc_from_trie_value(trie.get_u32(scalar)).0 as u32) << 24) | scalar;
+        self.0 = ((ccc_from_trie_value(trie.get32_u32(scalar)).0 as u32) << 24) | scalar;
     }
 }
 
@@ -551,9 +511,9 @@ where
     trie: &'data CodePointTrie<'data, u32>,
     supplementary_trie: Option<&'data CodePointTrie<'data, u32>>,
     scalars16: &'data ZeroSlice<u16>,
-    scalars24: &'data ZeroSlice<U24>,
+    scalars24: &'data ZeroSlice<char>,
     supplementary_scalars16: &'data ZeroSlice<u16>,
-    supplementary_scalars24: &'data ZeroSlice<U24>,
+    supplementary_scalars24: &'data ZeroSlice<char>,
     half_width_voicing_marks_become_non_starters: bool,
     /// The lowest character for which either of the following does
     /// not hold:
@@ -623,7 +583,7 @@ where
             supplementary_scalars24: if let Some(supplementary) = supplementary_tables {
                 &supplementary.scalars24
             } else {
-                EMPTY_U24
+                EMPTY_CHAR
             },
             half_width_voicing_marks_become_non_starters,
             decomposition_passthrough_bound: u32::from(decomposition_passthrough_bound),
@@ -639,7 +599,17 @@ where
         slice16: &ZeroSlice<u16>,
     ) -> (char, usize) {
         let len = usize::from(low >> 13) + 2;
-        let (starter, tail) = split_first_u16(slice16.get_subslice(offset..offset + len));
+        let (starter, tail) = slice16
+            .get_subslice(offset..offset + len)
+            .and_then(|slice| slice.split_first())
+            .map_or_else(
+                || {
+                    // GIGO case
+                    debug_assert!(false);
+                    (REPLACEMENT_CHARACTER, EMPTY_U16)
+                },
+                |(first, trail)| (char_from_u16(first), trail),
+            );
         if low & 0x1000 != 0 {
             // All the rest are combining
             for u in tail.iter() {
@@ -652,7 +622,7 @@ where
             let mut combining_start = 0;
             for u in tail.iter() {
                 let ch = char_from_u16(u);
-                let trie_value = self.trie.get(u32::from(ch));
+                let trie_value = self.trie.get(ch);
                 self.buffer.push(CharacterAndClass::new_with_trie_value(
                     CharacterAndTrieValue::new(ch, trie_value),
                 ));
@@ -671,23 +641,27 @@ where
         &mut self,
         low: u16,
         offset: usize,
-        slice32: &ZeroSlice<U24>,
+        slice32: &ZeroSlice<char>,
     ) -> (char, usize) {
         let len = usize::from(low >> 13) + 1;
-        let (starter, tail) = split_first_u24(slice32.get_subslice(offset..offset + len));
+        let (starter, tail) = slice32
+            .get_subslice(offset..offset + len)
+            .and_then(|slice| slice.split_first())
+            .unwrap_or_else(|| {
+                // GIGO case
+                debug_assert!(false);
+                (REPLACEMENT_CHARACTER, EMPTY_CHAR)
+            });
         if low & 0x1000 != 0 {
             // All the rest are combining
-            for u in tail.iter() {
-                self.buffer
-                    .push(CharacterAndClass::new_with_placeholder(char_from_u24(u)));
-            }
+            self.buffer
+                .extend(tail.iter().map(CharacterAndClass::new_with_placeholder));
             (starter, 0)
         } else {
             let mut i = 0;
             let mut combining_start = 0;
-            for u in tail.iter() {
-                let ch = char_from_u24(u);
-                let trie_value = self.trie.get(u32::from(ch));
+            for ch in tail.iter() {
+                let trie_value = self.trie.get(ch);
                 self.buffer.push(CharacterAndClass::new_with_trie_value(
                     CharacterAndTrieValue::new(ch, trie_value),
                 ));
@@ -710,7 +684,7 @@ where
             }
         }
 
-        CharacterAndTrieValue::new(c, self.trie.get(u32::from(c)))
+        CharacterAndTrieValue::new(c, self.trie.get(c))
     }
 
     #[inline(never)]
@@ -730,7 +704,7 @@ where
                 0xD800 | u32::from(CanonicalCombiningClass::KanaVoicing.0),
             ));
         }
-        let trie_value = supplementary.get(u32::from(c));
+        let trie_value = supplementary.get32(u32::from(c));
         if trie_value != 0 {
             return Some(CharacterAndTrieValue::new_from_supplement(c, trie_value));
         }
@@ -793,13 +767,13 @@ where
                             (starter, 0)
                         } else {
                             // Special case for the NFKD form of U+FDFA.
-                            for u in FDFA_NFKD {
+                            self.buffer.extend(FDFA_NFKD.map(|u| {
                                 // Safe, because `FDFA_NFKD` is known not to contain
                                 // surrogates.
-                                self.buffer.push(CharacterAndClass::new_starter(unsafe {
+                                CharacterAndClass::new_starter(unsafe {
                                     core::char::from_u32_unchecked(u32::from(u))
-                                }));
-                            }
+                                })
+                            }));
                             ('\u{0635}', 17)
                         }
                     } else {
@@ -1665,9 +1639,10 @@ impl DecomposingNormalizer {
     /// canonically equivant with each other if they differ by how U+0345 is ordered relative
     /// to other reorderable characters.
     ///
-    /// Deliberately private and not available outside the crate.
-    #[cfg(any(test, feature = "experimental"))]
-    fn try_new_uts46_decomposed_without_ignored_and_disallowed<D>(
+    /// Public for testing only.
+    #[doc(hidden)]
+    #[cfg(feature = "experimental")]
+    pub fn try_new_uts46_decomposed_without_ignored_and_disallowed<D>(
         data_provider: &D,
     ) -> Result<Self, NormalizerError>
     where
@@ -2086,7 +2061,7 @@ impl ComposingNormalizer {
     ///
     /// NOTE: This method remains experimental until suitability of this feature as part of
     /// IDNA processing has been demonstrated.
-    #[cfg(any(test, feature = "experimental"))]
+    #[cfg(feature = "experimental")]
     pub fn try_new_uts46_without_ignored_and_disallowed_unstable<D>(
         data_provider: &D,
     ) -> Result<Self, NormalizerError>
@@ -2113,7 +2088,7 @@ impl ComposingNormalizer {
         })
     }
 
-    #[cfg(any(test, feature = "experimental"))]
+    #[cfg(feature = "experimental")]
     icu_provider::gen_any_buffer_constructors!(
         locale: skip,
         options: skip,
@@ -2558,6 +2533,3 @@ impl<'a> core::fmt::Write for IsNormalizedSinkStr<'a> {
         }
     }
 }
-
-#[cfg(all(test, feature = "serde"))]
-mod tests;

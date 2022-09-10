@@ -4,7 +4,7 @@
 
 use diplomat_core::*;
 use rustdoc_types::{Crate, Item, ItemEnum};
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt;
 use std::fs::File;
 use std::path::PathBuf;
@@ -22,7 +22,7 @@ impl fmt::Display for RustLinkInfo {
 }
 
 fn main() {
-    let doc_types = ["icu", "fixed_decimal"]
+    let doc_types = ["icu", "fixed_decimal", "icu_provider_adapters"]
         .into_iter()
         .flat_map(collect_public_types)
         .map(|(path, typ)| RustLinkInfo {
@@ -66,6 +66,8 @@ lazy_static::lazy_static! {
     static ref IGNORED_TRAITS: HashSet<&'static str> = [
         // Rust and Rust ecosystem types
         "Any",
+        "AsMut",
+        "AsRef",
         "Bake",
         "Borrow",
         "BorrowMut",
@@ -84,6 +86,7 @@ lazy_static::lazy_static! {
         "Into",
         "Iterator", // ???
         "Ord",
+        "Provider", // new error handling stuff
         "PartialEq",
         "PartialOrd",
         "RefUnwindSafe",
@@ -111,14 +114,34 @@ lazy_static::lazy_static! {
         "EncodeAsVarULE",
         "IsCovariant",
 
-        // provider stuff
+        // provider stuff not relevant to FFI
         "DataMarker",
         "KeyedDataMarker",
+        "AsDowncastingAnyProvider",
+        "AsDeserializingBufferProvider",
+        "AsDynamicDataProviderAnyMarkerWrap",
+        "IterableDynamicDataProvider",
+        "IterableDataProvider",
+        "DataConverter",
+        "Filterable",
+
+        // The four main data provider traits should be covered if the enum or struct
+        // implementing them is covered
+        "DataProvider",
+        "DynamicDataProvider",
+        "BufferProvider",
+        "AnyProvider",
 
         // internal trait , all methods replicated on Date
         "Calendar",
         // Rust-specific conversion trait
         "AsCalendar",
+        "IntoAnyCalendar",
+    ].into_iter().collect();
+
+    static ref IGNORED_ASSOCIATED_ITEMS: HashMap<&'static str, &'static [&'static str]> = [
+        ("Writeable", &["writeable_length_hint", "write_to_parts", "write_to_string"][..]),
+        ("FromStr", &["Err"][..]),
     ].into_iter().collect();
 
     // Paths which are not checked for FFI coverage. Naming a type or module here
@@ -134,16 +157,72 @@ lazy_static::lazy_static! {
         "icu::calendar::AnyCalendar::try_new_for_locale_with_buffer_provider",
         "icu::calendar::AnyCalendar::try_new_with_any_provider",
         "icu::calendar::AnyCalendar::try_new_with_buffer_provider",
+        "icu::datetime::TimeZoneFormatter::try_new_with_any_provider",
+        "icu::datetime::TimeZoneFormatter::try_new_with_buffer_provider",
+        "icu::datetime::TypedDateFormatter::try_new_with_any_provider",
+        "icu::datetime::TypedDateFormatter::try_new_with_buffer_provider",
+        "icu::datetime::TypedDateTimeFormatter::try_new_with_any_provider",
+        "icu::datetime::TypedDateTimeFormatter::try_new_with_buffer_provider",
+        "icu::datetime::DateFormatter::try_new_with_any_provider",
+        "icu::datetime::DateFormatter::try_new_with_buffer_provider",
+        "icu::datetime::DateTimeFormatter::try_new_with_any_provider",
+        "icu::datetime::DateTimeFormatter::try_new_with_buffer_provider",
+        "icu::datetime::TimeFormatter::try_new_with_any_provider",
+        "icu::datetime::TimeFormatter::try_new_with_buffer_provider",
+        "icu::datetime::ZonedDateTimeFormatter::try_new_with_any_provider",
+        "icu::datetime::ZonedDateTimeFormatter::try_new_with_buffer_provider",
+        "icu::datetime::TypedZonedDateTimeFormatter::try_new_with_any_provider",
+        "icu::datetime::TypedZonedDateTimeFormatter::try_new_with_buffer_provider",
+        "icu::calendar::week::WeekCalculator::try_new_with_any_provider",
+        "icu::calendar::week::WeekCalculator::try_new_with_buffer_provider",
+        "icu::locid_transform::LocaleCanonicalizer::try_new_with_any_provider",
+        "icu::locid_transform::LocaleCanonicalizer::try_new_with_buffer_provider",
+        "icu::locid_transform::LocaleExpander::try_new_with_any_provider",
+        "icu::locid_transform::LocaleExpander::try_new_with_buffer_provider",
+        "icu::normalizer::ComposingNormalizer::try_new_nfc_with_any_provider",
+        "icu::normalizer::ComposingNormalizer::try_new_nfkc_with_any_provider",
+        "icu::normalizer::ComposingNormalizer::try_new_uts46_without_ignored_and_disallowed_with_any_provider",
+        "icu::normalizer::DecomposingNormalizer::try_new_nfd_with_any_provider",
+        "icu::normalizer::DecomposingNormalizer::try_new_nfkd_with_any_provider",
+        "icu::normalizer::properties::CanonicalCombiningClassMap::try_new_with_any_provider",
+        "icu::normalizer::properties::CanonicalComposition::try_new_with_any_provider",
+        "icu::normalizer::properties::CanonicalDecomposition::try_new_with_any_provider",
+        "icu::normalizer::ComposingNormalizer::try_new_nfc_with_buffer_provider",
+        "icu::normalizer::ComposingNormalizer::try_new_nfkc_with_buffer_provider",
+        "icu::normalizer::ComposingNormalizer::try_new_uts46_without_ignored_and_disallowed_with_buffer_provider",
+        "icu::normalizer::DecomposingNormalizer::try_new_nfd_with_buffer_provider",
+        "icu::normalizer::DecomposingNormalizer::try_new_nfkd_with_buffer_provider",
+        "icu::normalizer::properties::CanonicalCombiningClassMap::try_new_with_buffer_provider",
+        "icu::normalizer::properties::CanonicalComposition::try_new_with_buffer_provider",
+        "icu::normalizer::properties::CanonicalDecomposition::try_new_with_buffer_provider",
+        "icu::timezone::MetaZoneCalculator::try_new_with_any_provider",
+        "icu::timezone::MetaZoneCalculator::try_new_with_buffer_provider",
 
-        // Stuff that could be exposed over FFI but is not currently planned
+        // Stuff that could be exposed over FFI but is not currently planned (for 1.0)
+        //
+        // Post 1.0 we should go through this and plan them, filing followups
+        // for ones we do plan and adding links here
+        // https://github.com/unicode-org/icu4x/issues/2492
         // =========================
 
-        // Largely for use by datetimeformat, not super public (#2421)
-        "icu::calendar::week_of",
         // Largely for use by datetimeformat, not generally useful
         "icu::calendar::AnyCalendar::convert_any_date",
         "icu::calendar::AnyCalendar::convert_any_datetime",
 
+        // Punted post 1.0: not strongly needed yet and don't want to lock in a solution
+        // Potential solutions:
+        // - borrow and clone (cheap as long it's not json)
+        // - introduce a DTFBorrowed type in Rust and FFI (bunch of work, annoying)
+        // - introduce a DateDataBundle and TimeDataBundle struct to FFI that contains
+        //   basically just DateFormat or TimeFormat but it is explicitly an Option that
+        //   can be destructively passed to these constructors via &mut self. All future
+        //   specialized constructors show up on this type instead.
+        "icu::datetime::DateTimeFormatter::try_from_date_and_time",
+        "icu::datetime::TypedDateTimeFormatter::try_from_date_and_time",
+
+        // experimental
+        "icu::datetime::DateTimeFormatter::resolve_components",
+        "icu::datetime::TypedDateTimeFormatter::resolve_components",
 
         // Individual calendars: Currently the main entry point is AnyCalendar
         "icu::calendar::buddhist",
@@ -153,31 +232,206 @@ lazy_static::lazy_static! {
         "icu::calendar::japanese",
         "icu::calendar::julian",
         "icu::calendar::any_calendar::IntoAnyCalendar",
+        "icu::calendar::Date::new_gregorian_date",
+        "icu::calendar::Date::new_buddhist_date",
+        "icu::calendar::Date::new_coptic_date",
+        "icu::calendar::Date::new_ethiopian_date",
+        "icu::calendar::Date::new_indian_date",
+        "icu::calendar::Date::new_japanese_date",
+        "icu::calendar::Date::new_japanese_extended_date",
+        "icu::calendar::Date::new_julian_date",
+        "icu::calendar::DateTime::new_gregorian_datetime",
+        "icu::calendar::DateTime::new_buddhist_datetime",
+        "icu::calendar::DateTime::new_coptic_datetime",
+        "icu::calendar::DateTime::new_ethiopian_datetime",
+        "icu::calendar::DateTime::new_indian_datetime",
+        "icu::calendar::DateTime::new_japanese_datetime",
+        "icu::calendar::DateTime::new_japanese_extended_datetime",
+        "icu::calendar::DateTime::new_julian_datetime",
 
         // Arithmetic APIs are still experimental/hidden for 1.0
         "icu::calendar::DateDuration",
         "icu::calendar::DateDurationUnit",
 
+        // mostly used for provider, may in the future be exposed for options
+        "icu::datetime::fields",
+        // experimental
+        "icu::datetime::options::components",
+        "icu::datetime::options::preferences",
+        "icu::datetime::DateTimeFormatter::try_new_experimental_unstable",
+        "icu::datetime::TypedDateTimeFormatter::try_new_experimental_unstable",
+        "icu::datetime::TypedZonedDateTimeFormatter::try_new_experimental_unstable",
+        "icu::datetime::ZonedDateTimeFormatter::try_new_experimental_unstable",
+
+        // Not necessary for now
+        "icu::calendar::Date::day_of_year_info",
+
+
+        // Formatting wrappers, may be supported in the future
+        "icu::datetime::FormattedTimeZone",
+        "icu::datetime::FormattedDateTime",
+        "icu::datetime::FormattedZonedDateTime",
+
+        // Rust-specific power user API for rules ASTS and such
+        // could be exposed in the future but it's complicated
+        "icu::plurals::rules",
+
+        // May be exposed when we have associated constants over FFI
+        "icu::properties::BidiClass",
+        "icu::properties::CanonicalCombiningClass",
+        "icu::properties::EastAsianWidth",
+        "icu::properties::GeneralCategory",
+        "icu::properties::GeneralCategoryGroup",
+        "icu::properties::GraphemeClusterBreak",
+        "icu::properties::LineBreak",
+        "icu::properties::Script",
+        "icu::properties::SentenceBreak",
+        "icu::properties::WordBreak",
+
+        // Experimental
+        "icu::properties::maps::load_canonical_combining_class",
+
+        // Not planned for 1.0
+        "icu::properties::maps::CodePointMapDataBorrowed::iter_ranges",
+        "icu::properties::sets::CodePointSetDataBorrowed::iter_ranges",
+        "icu::properties::maps::CodePointMapData::as_code_point_trie",
+        "icu::properties::maps::CodePointMapData::from_code_point_trie",
+        "icu::properties::sets::CodePointSetData::as_code_point_inversion_list",
+        "icu::properties::sets::CodePointSetData::from_code_point_inversion_list",
+        "icu::properties::sets::CodePointSetData::to_code_point_inversion_list",
+        "icu::collections::codepointinvlist",
+        "icu::collections::codepointtrie",
+
+        // Not planned until someone needs them
+        "icu::locid::extensions",
+        "icu::locid::subtags",
+        "icu::locid::LanguageIdentifier",
+
+        // experimental
+        "icu::normalizer::ComposingNormalizer::try_new_uts46_without_ignored_and_disallowed_unstable",
+
+        // can't be exposed till Diplomat has Write16
+        "icu::normalizer::ComposingNormalizer::normalize_utf16",
+        "icu::normalizer::ComposingNormalizer::normalize_utf16_to",
+        "icu::normalizer::ComposingNormalizer::is_normalized_utf16",
+        "icu::normalizer::DecomposingNormalizer::normalize_utf16",
+        "icu::normalizer::DecomposingNormalizer::normalize_utf16_to",
+        "icu::normalizer::DecomposingNormalizer::is_normalized_utf16",
+
+        // Can't be exposed till diplomat has input iterators, as well as
+        // safety for borrowing input iterators into return types
+        "icu::normalizer::ComposingNormalizer::normalize_iter",
+        "icu::normalizer::DecomposingNormalizer::normalize_iter",
+        "icu::normalizer::Composition",
+        "icu::normalizer::Decomposition",
+
+        // Need to think about how to expose DataErrorKind for this to work
+        "icu_provider_adapters::empty::EmptyDataProvider::new_with_error_kind",
 
         // Stuff that does not need to be exposed over FFI
         // Especially for stuff that are Rust specific like conversion traits
         // and markers and newtypes
         // =========================
 
-        // "Internal" trait that should never be called directly
-        "icu::calendar::Calendar",
-        // Used for rust-specific type transforms
-        "icu::calendar::AsCalendar",
-
-        // FFI largely deals with primitives rather than Rust's nice wrapper types
-        // (which are hard to do in a zero-cost way over FFI)
-        "icu::calendar::types",
-
         // Provider modules
         // We could potentially expose them later, but it's hard to expose them
         // uniformly especially for complex types
         "icu::calendar::provider",
         "icu::datetime::provider",
+        "icu::locid_transform::provider",
+        "icu::plurals::provider",
+        "icu::properties::provider",
+        "icu::segmenter::provider",
+        "icu::normalizer::provider",
+        "icu::timezone::provider",
+
+        // Reexports (tool doesn't currently handle these)
+        "icu::calendar::any_calendar::AnyCalendar",
+        "icu::calendar::any_calendar::AnyCalendarKind",
+        "icu::datetime::time_zone::TimeZoneFormatter",
+        "icu::datetime::options::DateTimeFormatterOptions",
+
+        // "Internal" trait that should never be called directly
+        "icu::calendar::Calendar",
+        // Rust-specific calendar wrapper stuff
+        "icu::calendar::AsCalendar",
+        "icu::datetime::CldrCalendar",
+        "icu::calendar::Ref",
+        "icu::calendar::Date::wrap_calendar_in_rc",
+        "icu::calendar::Date::wrap_calendar_in_arc",
+        "icu::calendar::DateTime::wrap_calendar_in_rc",
+        "icu::calendar::DateTime::wrap_calendar_in_arc",
+
+        // Individual markerlike calendar types and inner types
+        // inner types are only public for associated type reasons, and the markerlike
+        // calendar types exist to implement the trait
+        "icu::calendar::Date::from_raw",
+        "icu::calendar::Date::inner",
+        "icu::calendar::Iso",
+        "icu::calendar::iso::Iso",
+        "icu::calendar::iso::IsoDateInner",
+        "icu::calendar::Gregorian",
+        "icu::calendar::gregorian::Gregorian",
+        "icu::calendar::gregorian::GregorianDateInner",
+        "icu::calendar::any_calendar::AnyDateInner",
+
+        // Rusty input trait
+        "icu::datetime::input",
+
+        // Options bags which are expanded in FFI to regular functions
+        "icu::datetime::DateTimeFormatterOptions",
+        "icu::datetime::time_zone::TimeZoneFormatterOptions",
+        "icu::datetime::options::length::Bag",
+
+        // FFI largely deals with primitives rather than Rust's nice wrapper types
+        // (which are hard to do in a zero-cost way over FFI)
+        "icu::calendar::types",
+
+        // Convenience iterator for Rust
+        "icu::plurals::PluralCategory::all",
+        // associated type
+        "icu::plurals::PluralOperands::Err",
+
+        // Properties Rust internals
+        "icu::properties::maps::CodePointMapData::as_borrowed",
+        "icu::properties::maps::CodePointMapData::from_data",
+        "icu::properties::maps::CodePointMapData::to_code_point_trie",
+        "icu::properties::maps::CodePointMapData::try_into_converted",
+        "icu::properties::sets::CodePointSetData::as_borrowed",
+        "icu::properties::sets::CodePointSetData::from_data",
+        "icu::properties::sets::CodePointSetDataBorrowed::contains_u32",
+
+        // locid macros
+        "icu::locid::langid",
+        "icu::locid::locale",
+        "icu::locid::extensions_other_key",
+        "icu::locid::extensions_private_key",
+        "icu::locid::extensions_transform_key",
+        "icu::locid::extensions_unicode_attribute",
+        "icu::locid::extensions_unicode_key",
+        "icu::locid::extensions_unicode_value",
+        "icu::locid::subtags_language",
+        "icu::locid::subtags_region",
+        "icu::locid::subtags_script",
+        "icu::locid::subtags_variant",
+        // assoc type
+        "icu::locale::Locale::Err",
+
+        // Segmenter types and type aliases that are constructed via methods. They don't need FFI.
+        "icu::segmenter::GraphemeClusterBreakIteratorLatin1",
+        "icu::segmenter::GraphemeClusterBreakIteratorUtf16",
+        "icu::segmenter::GraphemeClusterBreakIteratorUtf8",
+        "icu::segmenter::LineBreakIterator",
+        "icu::segmenter::LineBreakIteratorLatin1",
+        "icu::segmenter::LineBreakIteratorUtf16",
+        "icu::segmenter::LineBreakIteratorUtf8",
+        "icu::segmenter::RuleBreakIterator",
+        "icu::segmenter::SentenceBreakIteratorLatin1",
+        "icu::segmenter::SentenceBreakIteratorUtf16",
+        "icu::segmenter::SentenceBreakIteratorUtf8",
+        "icu::segmenter::WordBreakIteratorLatin1",
+        "icu::segmenter::WordBreakIteratorUtf16",
+        "icu::segmenter::WordBreakIteratorUtf8",
     ].iter().map(|s| s.split("::").map(|x| x.to_string()).collect()).collect();
 }
 
@@ -219,10 +473,12 @@ fn collect_public_types(krate: &str) -> impl Iterator<Item = (Vec<String>, ast::
         CRATES.get(krate).unwrap()
     }
 
-    enum In {
+    #[derive(Debug)]
+    enum In<'a> {
         Trait,
-        Enum,
-        Struct,
+        // The Option<String> is for the trait name of an impl
+        Enum(Option<&'a str>),
+        Struct(Option<&'a str>),
     }
 
     fn recurse(
@@ -246,6 +502,18 @@ fn collect_public_types(krate: &str) -> impl Iterator<Item = (Vec<String>, ast::
                 types.insert((path, ty));
             }
         }
+
+        fn check_ignored_assoc_item(name: &str, trait_path: Option<&str>) -> bool {
+            if let Some(tr) = trait_path {
+                if let Some(ignored) = IGNORED_ASSOCIATED_ITEMS.get(tr) {
+                    if ignored.contains(&name) {
+                        return true;
+                    }
+                }
+            }
+            false
+        }
+
         if IGNORED_PATHS.contains(&path) {
             return;
         }
@@ -294,8 +562,9 @@ fn collect_public_types(krate: &str) -> impl Iterator<Item = (Vec<String>, ast::
                 }
             }
             _ => {
+                let item_name = item.name.as_ref().unwrap();
                 if !path_already_extended {
-                    path.push(item.name.as_ref().unwrap().to_string());
+                    path.push(item_name.to_string());
                 }
                 match &item.inner {
                     ItemEnum::Module(module) => {
@@ -307,11 +576,13 @@ fn collect_public_types(krate: &str) -> impl Iterator<Item = (Vec<String>, ast::
                     ItemEnum::Struct(structt) => {
                         for id in &structt.impls {
                             if let ItemEnum::Impl(inner) = &krate.index[id].inner {
+                                let mut trait_name = None;
                                 if let Some(path) = &inner.trait_ {
                                     let name = &path.name;
                                     if IGNORED_TRAITS.contains(name.as_str()) {
                                         continue;
                                     }
+                                    trait_name = Some(&*path.name);
                                 }
                                 for id in &inner.items {
                                     recurse(
@@ -320,13 +591,8 @@ fn collect_public_types(krate: &str) -> impl Iterator<Item = (Vec<String>, ast::
                                         types,
                                         path.clone(),
                                         false,
-                                        Some(In::Struct),
+                                        Some(In::Struct(trait_name)),
                                     );
-                                }
-                                for name in &inner.provided_trait_methods {
-                                    let mut path = path.clone();
-                                    path.push(name.to_string());
-                                    insert_ty(types, path, ast::DocType::FnInStruct);
                                 }
                             }
                         }
@@ -340,11 +606,13 @@ fn collect_public_types(krate: &str) -> impl Iterator<Item = (Vec<String>, ast::
 
                         for id in &enumm.impls {
                             if let ItemEnum::Impl(inner) = &krate.index[id].inner {
+                                let mut trait_name = None;
                                 if let Some(path) = &inner.trait_ {
                                     let name = &path.name;
                                     if IGNORED_TRAITS.contains(name.as_str()) {
                                         continue;
                                     }
+                                    trait_name = Some(&*path.name);
                                 }
                                 for id in &inner.items {
                                     recurse(
@@ -353,13 +621,8 @@ fn collect_public_types(krate: &str) -> impl Iterator<Item = (Vec<String>, ast::
                                         types,
                                         path.clone(),
                                         false,
-                                        Some(In::Enum),
+                                        Some(In::Enum(trait_name)),
                                     );
-                                }
-                                for name in &inner.provided_trait_methods {
-                                    let mut path = path.clone();
-                                    path.push(name.to_string());
-                                    insert_ty(types, path, ast::DocType::FnInEnum);
                                 }
                             }
                         }
@@ -392,43 +655,49 @@ fn collect_public_types(krate: &str) -> impl Iterator<Item = (Vec<String>, ast::
                         insert_ty(types, path, ast::DocType::Typedef);
                     }
                     ItemEnum::Method(_) => {
-                        insert_ty(
-                            types,
-                            path,
-                            match inside {
-                                Some(In::Enum) => ast::DocType::FnInEnum,
-                                Some(In::Trait) => ast::DocType::FnInTrait,
-                                Some(In::Struct) => ast::DocType::FnInStruct,
-                                _ => panic!("Method needs In"),
-                            },
-                        );
+                        let doc_type = match inside {
+                            Some(In::Enum(tr)) | Some(In::Struct(tr))
+                                if check_ignored_assoc_item(item_name, tr) =>
+                            {
+                                return
+                            }
+                            Some(In::Enum(_)) => ast::DocType::FnInEnum,
+                            Some(In::Trait) => ast::DocType::FnInTrait,
+                            Some(In::Struct(_)) => ast::DocType::FnInStruct,
+                            _ => panic!("Method needs In"),
+                        };
+                        insert_ty(types, path, doc_type);
                     }
                     ItemEnum::Variant(_) => {
                         insert_ty(types, path, ast::DocType::EnumVariant);
                     }
                     ItemEnum::AssocConst { .. } => {
-                        insert_ty(
-                            types,
-                            path,
-                            match inside {
-                                Some(In::Enum) => ast::DocType::AssociatedConstantInEnum,
-                                Some(In::Trait) => ast::DocType::AssociatedConstantInTrait,
-                                Some(In::Struct) => ast::DocType::AssociatedConstantInStruct,
-                                _ => panic!("AssocConst needs In"),
-                            },
-                        );
+                        let doc_type = match inside {
+                            Some(In::Enum(tr)) | Some(In::Struct(tr))
+                                if check_ignored_assoc_item(item_name, tr) =>
+                            {
+                                return
+                            }
+                            Some(In::Enum(_)) => ast::DocType::AssociatedConstantInEnum,
+                            Some(In::Trait) => ast::DocType::AssociatedConstantInTrait,
+                            Some(In::Struct(_)) => ast::DocType::AssociatedConstantInStruct,
+                            _ => panic!("AssocConst needs In"),
+                        };
+                        insert_ty(types, path, doc_type);
                     }
                     ItemEnum::AssocType { .. } => {
-                        insert_ty(
-                            types,
-                            path,
-                            match inside {
-                                Some(In::Enum) => ast::DocType::AssociatedTypeInEnum,
-                                Some(In::Trait) => ast::DocType::AssociatedTypeInTrait,
-                                Some(In::Struct) => ast::DocType::AssociatedTypeInStruct,
-                                _ => panic!("AssocType needs In"),
-                            },
-                        );
+                        let doc_type = match inside {
+                            Some(In::Enum(tr)) | Some(In::Struct(tr))
+                                if check_ignored_assoc_item(item_name, tr) =>
+                            {
+                                return
+                            }
+                            Some(In::Enum(_)) => ast::DocType::AssociatedTypeInEnum,
+                            Some(In::Trait) => ast::DocType::AssociatedTypeInTrait,
+                            Some(In::Struct(_)) => ast::DocType::AssociatedTypeInStruct,
+                            _ => panic!("AssocType needs In"),
+                        };
+                        insert_ty(types, path, doc_type);
                     }
                     _ => todo!("{:?}", item),
                 }

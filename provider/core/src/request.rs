@@ -7,9 +7,8 @@ use core::default::Default;
 use core::fmt;
 use core::fmt::Debug;
 use icu_locid::extensions::unicode as unicode_ext;
-use icu_locid::ordering::SubtagOrderingResult;
 use icu_locid::subtags::{Language, Region, Script, Variants};
-use icu_locid::{LanguageIdentifier, Locale};
+use icu_locid::{LanguageIdentifier, Locale, SubtagOrderingResult};
 use writeable::{LengthHint, Writeable};
 
 #[cfg(doc)]
@@ -123,12 +122,6 @@ impl fmt::Debug for DataLocale {
     }
 }
 
-impl fmt::Display for DataLocale {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeable::Writeable::write_to(self, f)
-    }
-}
-
 impl Writeable for DataLocale {
     fn write_to<W: core::fmt::Write + ?Sized>(&self, sink: &mut W) -> core::fmt::Result {
         self.langid.write_to(sink)?;
@@ -139,15 +132,17 @@ impl Writeable for DataLocale {
         Ok(())
     }
 
-    fn write_len(&self) -> LengthHint {
-        self.langid.write_len()
+    fn writeable_length_hint(&self) -> LengthHint {
+        self.langid.writeable_length_hint()
             + if !self.keywords.is_empty() {
-                self.keywords.write_len() + 3
+                self.keywords.writeable_length_hint() + 3
             } else {
                 LengthHint::exact(0)
             }
     }
 }
+
+writeable::impl_display_with_writeable!(DataLocale);
 
 impl From<LanguageIdentifier> for DataLocale {
     fn from(langid: LanguageIdentifier) -> Self {

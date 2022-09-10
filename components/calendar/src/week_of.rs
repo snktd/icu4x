@@ -71,8 +71,8 @@ impl WeekCalculator {
     /// use icu_calendar::week::WeekCalculator;
     /// use icu_calendar::types::{IsoWeekday, DayOfMonth, WeekOfMonth};
     ///
-    /// let week_calculator = WeekCalculator::try_new_with_buffer_provider(
-    ///     &icu_testdata::get_provider(),
+    /// let week_calculator = WeekCalculator::try_new_unstable(
+    ///     &icu_testdata::unstable(),
     ///     &icu_locid::locale!("en-GB").into()
     /// )
     /// .expect("Data exists");
@@ -101,8 +101,8 @@ impl WeekCalculator {
     /// use icu_calendar::types::{IsoWeekday, DayOfMonth};
     /// use icu_calendar::Date;
     ///
-    /// let week_calculator = WeekCalculator::try_new_with_buffer_provider(
-    ///     &icu_testdata::get_provider(),
+    /// let week_calculator = WeekCalculator::try_new_unstable(
+    ///     &icu_testdata::unstable(),
     ///     &icu_locid::locale!("en-GB").into()
     /// )
     /// .expect("Data exists");
@@ -484,7 +484,7 @@ mod tests {
         let day = (yyyymmdd % 100) as u8;
 
         let date = Date::new_iso_date(year, month, day)?;
-        let previous_month = date.clone().added(DateDuration::new(0, -1, 0, 0));
+        let previous_month = date.added(DateDuration::new(0, -1, 0, 0));
 
         week_of(
             calendar,
