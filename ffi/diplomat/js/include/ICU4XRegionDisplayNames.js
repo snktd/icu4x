@@ -32,4 +32,18 @@ export class ICU4XRegionDisplayNames {
       }
     })();
   }
+
+  of(arg_code) {
+    const buf_arg_code = diplomatRuntime.DiplomatBuf.str(wasm, arg_code);
+    const diplomat_out = diplomatRuntime.withWriteable(wasm, (writeable) => {
+      return (() => {
+        const is_ok = wasm.ICU4XRegionDisplayNames_of(this.underlying, buf_arg_code.ptr, buf_arg_code.size, writeable) == 1;
+        if (!is_ok) {
+          throw new diplomatRuntime.FFIError(undefined);
+        }
+      })();
+    });
+    buf_arg_code.free();
+    return diplomat_out;
+  }
 }

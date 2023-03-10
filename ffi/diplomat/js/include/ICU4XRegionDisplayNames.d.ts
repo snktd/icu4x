@@ -17,4 +17,9 @@ export class ICU4XRegionDisplayNames {
    * @throws {@link FFIError}<{@link ICU4XError}>
    */
   static try_new_unstable(provider: ICU4XDataProvider, locale: ICU4XLocale): ICU4XRegionDisplayNames | never;
+
+  /**
+   * @throws {@link FFIError}<void>
+   */
+  of(code: string): string | never;
 }
